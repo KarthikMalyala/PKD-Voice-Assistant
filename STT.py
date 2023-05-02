@@ -2,24 +2,53 @@
 ## Karthik Malyala
 
 import speech_recognition as sr
+import re
+import asyncio
 import pyaudio
 import pvporcupine
 import pyttsx3
 import time
 import struct
 import winsound
+from EdgeGPT import Chatbot, ConversationStyle
+from responsive_voice import ResponsiveVoice
+
+async def process(prompt):
+    bot = Chatbot(cookiePath='cookies.json')
+    response = await bot.ask(prompt=prompt, conversation_style=ConversationStyle.balanced)
+
+    for message in response["item"]["messages"]:
+        if message["author"] == "bot":
+            bot_response = message["text"]
+
+    # Select only the bot response from the response dictionary
+    for message in response["item"]["messages"]:
+        if message["author"] == "bot":
+            bot_response = message["text"]
+    # Remove [^#^] citations in response
+    bot_response = re.sub(r'\b[A-Z][^?]*\?\b', '', bot_response)
+    bot_response = re.sub('\[\^\d+\^\]', '', bot_response)
+    bot_response = re.sub('Hello, this is Bing. ', '', bot_response)
+    bot_response = re.sub('😊', '', bot_response)
+    await bot.close()
+    return bot_response
 
 def speak(text):
-    engine = pyttsx3.init('sapi5')
-    voices = engine.getProperty('voices')
-    engine.setProperty('voice',voices[0].id)
-    print('\n' + 'LARRI: ' + text + ' \n')
-    engine.say(text)
-    engine.runAndWait()
+    engine = ResponsiveVoice(gender=ResponsiveVoice.MALE, lang=ResponsiveVoice.ENGLISH_GB, pitch=0.4, rate=0.5, vol=1)
+    #engine = pyttsx3.init('sapi5')
+    #voices = engine.getProperty('voices')
+    #engine.setProperty('voice',voices[0].id)
+    if text == "Stopping Sir" or text == "":
+        engine.say(text, blocking=True)
+    else:
+        print('\n' + 'You asked: ' + text + ' \n')
+        output = asyncio.run(process(text))
+        print('LARRI: ' + output + ' \n')
+        engine.say(output, blocking=True)
 
 def takeCommand():
     r = sr.Recognizer()
-    with sr.Microphone() as source:
+    with sr.Microphone(device_index=2) as source:
         print("Listening.... \n", end="")
         audio = r.listen(source)
         query = ''
@@ -27,18 +56,16 @@ def takeCommand():
         try:
             print("Recognizing...\n", end="")
             query = r.recognize_google(audio, language= 'en-US')
-            #print(f"User said: {query}")
 
         except Exception as e:
             print("Exception: " + str(e))
 
     return query.lower()
 
-
 def flow():
     global enable
     userSaid = takeCommand()
-    if "stop" in userSaid:
+    if "stop" in userSaid or "no" in userSaid:
         speak("Stopping Sir")
         enable = False
     else:
@@ -80,4 +107,3 @@ def main():
 
 enable = True
 main()
-
